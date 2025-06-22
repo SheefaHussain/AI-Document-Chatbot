@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Document Chatbot</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom font for better aesthetics */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* Light blue-grey background */
+        }
+        /* Custom styles for better visual appeal */
+        .card {
+            background-color: #ffffff;
+            border-radius: 1.5rem; /* More rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem; /* Rounded buttons */
+            transition: background-color 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Darker Indigo on hover */
+        }
+        .btn-secondary {
+            background-color: #6b7280; /* Gray */
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.3s ease;
+            font-size: 0.875rem; /* text-sm */
+        }
+        .btn-secondary:hover {
+            background-color: #4b5563; /* Darker Gray on hover */
+        }
+        .btn-danger {
+            background-color: #ef4444; /* Red */
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            transition: background-color 0.3s ease;
+        }
+        .btn-danger:hover {
+            background-color: #dc2626; /* Darker Red on hover */
+        }
+        .input-field {
+            border: 1px solid #d1d5db; /* Light grey border */
+            border-radius: 0.75rem;
+            padding: 0.75rem 1rem;
+            width: 100%;
+        }
+        .chat-message {
+            background-color: #e0e7ff; /* Light blue for messages */
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="container mx-auto max-w-3xl card p-8">
+        <h1 class="text-4xl font-extrabold text-center text-gray-800 mb-8">
+            <span class="text-indigo-600">AI</span> Document Chatbot
+        </h1>
+
+        <!-- File Upload Section -->
+        <div class="mb-6">
+            <label for="fileInput" class="block text-gray-700 text-lg font-semibold mb-2">Upload a File (.txt, .md, .pdf, .docx):</label>
+            <input type="file" id="fileInput" accept=".txt,.md,.pdf,.docx" class="input-field block w-full text-gray-700">
+            <p id="fileName" class="text-gray-500 text-sm mt-2 hidden"></p>
+            <p id="fileError" class="text-red-500 text-sm mt-2 hidden"></p>
+        </div>
+
+        <!-- File Content Display - Initially entirely hidden -->
+        <div id="filePreviewSection" class="mb-6 hidden">
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-gray-700 text-lg font-semibold">File Content Preview:</label>
+                <button id="toggleFilePreviewButton" class="btn-secondary">
+                    Show File
+                </button>
+            </div>
+            <textarea id="fileContent" rows="10" class="input-field bg-gray-50 resize-y hidden" readonly placeholder="Uploaded file content (extracted by backend) will appear here..."></textarea>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="mb-6">
+            <label for="questionInput" class="block text-gray-700 text-lg font-semibold mb-2">Ask a Question:</label>
+            <textarea id="questionInput" rows="3" class="input-field resize-y" placeholder="e.g., 'What is the main topic of the document?'"></textarea>
+            <button id="askButton" class="btn-primary mt-4 w-full md:w-auto">
+                Ask Chatbot
+            </button>
+            <div id="loadingIndicator" class="loading-spinner mx-auto mt-4 hidden"></div>
+        </div>
+
+        <!-- Chat Response Area -->
+        <div id="chatResponses" class="space-y-4">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Chat History:</h2>
+            <div id="responseContainer" class="bg-gray-100 p-4 rounded-xl max-h-96 overflow-y-auto">
+                <!-- Chat messages will be appended here -->
+                <p class="text-gray-600">No questions asked yet.</p>
+            </div>
+            <button id="clearHistoryButton" class="btn-danger mt-4 w-full md:w-auto">
+                Clear History
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        // Get references to DOM elements
+        const fileInput = document.getElementById('fileInput');
+        const fileNameDisplay = document.getElementById('fileName');
+        const fileErrorDisplay = document.getElementById('fileError');
+        const filePreviewSection = document.getElementById('filePreviewSection');
+        const fileContentDisplay = document.getElementById('fileContent');
+        const toggleFilePreviewButton = document.getElementById('toggleFilePreviewButton');
+        const questionInput = document.getElementById('questionInput');
+        const askButton = document.getElementById('askButton');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const responseContainer = document.getElementById('responseContainer');
+        const clearHistoryButton = document.getElementById('clearHistoryButton');
+
+        let uploadedFileText = '';
+        let isFilePreviewVisible = false;
+
+        // *** IMPORTANT: Replace with your actual deployed backend URL when deploying! ***
+        const BACKEND_URL = 'http://127.0.0.1:5000'; 
+
+        // Function to reset the file upload and preview sections
+        function resetFileSection() {
+            fileInput.value = ''; // Clear selected file
+            fileNameDisplay.textContent = '';
+            fileNameDisplay.classList.add('hidden');
+            fileContentDisplay.value = '';
+            fileContentDisplay.classList.add('hidden');
+            filePreviewSection.classList.add('hidden');
+            toggleFilePreviewButton.textContent = 'Show File';
+            isFilePreviewVisible = false;
+            uploadedFileText = '';
+            fileErrorDisplay.classList.add('hidden');
+        }
+
+        // Event listener for file input change
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            
+            resetFileSection(); // Reset everything related to file input first
+
+            if (!file) {
+                return; // Exit if no file selected
+            }
+
+            fileNameDisplay.textContent = `Selected file: ${file.name}`;
+            fileNameDisplay.classList.remove('hidden');
+
+            // Show loading for file processing
+            loadingIndicator.classList.remove('hidden');
+            fileInput.disabled = true;
+            askButton.disabled = true;
+            toggleFilePreviewButton.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                // Send the file to the backend for text extraction
+                const response = await fetch(`${BACKEND_URL}/upload_file`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown backend error' }));
+                    throw new Error(`Backend error: ${errorData.message || response.statusText}`);
+                }
+
+                const result = await response.json();
+                if (result.extracted_text) {
+                    uploadedFileText = result.extracted_text;
+                    fileContentDisplay.value = uploadedFileText;
+                    
+                    filePreviewSection.classList.remove('hidden');
+                    toggleFilePreviewButton.disabled = false;
+                    displayMessage('File processed successfully by backend! Click "Show File" to preview.', 'info');
+                } else {
+                    throw new Error('Backend did not return extracted text.');
+                }
+
+            } catch (error) {
+                console.error("Error processing file with backend:", error);
+                fileErrorDisplay.textContent = `Error processing file: ${error.message}. Make sure your Python backend is running and accessible.`;
+                fileErrorDisplay.classList.remove('hidden');
+                uploadedFileText = '';
+                filePreviewSection.classList.add('hidden');
+                displayMessage('Error processing file. See console for details.', 'error');
+            } finally {
+                loadingIndicator.classList.add('hidden');
+                fileInput.disabled = false;
+                askButton.disabled = false;
+                toggleFilePreviewButton.disabled = false;
+            }
+        });
+
+        // Event listener for the toggle file preview button
+        toggleFilePreviewButton.addEventListener('click', () => {
+            isFilePreviewVisible = !isFilePreviewVisible;
+            if (isFilePreviewVisible) {
+                fileContentDisplay.classList.remove('hidden');
+                toggleFilePreviewButton.textContent = 'Hide File';
+            } else {
+                fileContentDisplay.classList.add('hidden');
+                toggleFilePreviewButton.textContent = 'Show File';
+            }
+        });
+
+
+        // Event listener for the "Ask Chatbot" button
+        askButton.addEventListener('click', async () => {
+            const question = questionInput.value.trim();
+
+            if (!question) {
+                displayMessage('Please enter a question.', 'error');
+                return;
+            }
+
+            if (!uploadedFileText) {
+                displayMessage('Please upload and process a file first.', 'error');
+                return;
+            }
+
+            // Clear initial "No questions asked yet." message
+            if (responseContainer.querySelector('p.text-gray-600')) {
+                responseContainer.innerHTML = '';
+            }
+
+            // Display user's question in the chat history
+            appendMessage('You', question, 'user');
+
+            // Show loading indicator and disable input
+            loadingIndicator.classList.remove('hidden');
+            askButton.disabled = true;
+            questionInput.disabled = true;
+            fileInput.disabled = true;
+            toggleFilePreviewButton.disabled = true;
+
+            try {
+                // Construct the full prompt including document content
+                const fullPrompt = `Based on the following document content, answer the user's question. If the answer is not in the document, state that you cannot find the information.\n\nDocument:\n"${uploadedFileText}"\n\nQuestion: "${question}"\n\nAnswer:`;
+
+                // Send the prompt to your backend's new /ask_gemini endpoint
+                const response = await fetch(`${BACKEND_URL}/ask_gemini`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: fullPrompt }) // Send prompt to backend
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ message: 'Unknown AI backend error' }));
+                    throw new Error(`AI Backend error: ${errorData.message || response.statusText}. Status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                let aiResponse = "I could not get a response from the AI.";
+                if (result.ai_response) { // Expecting 'ai_response' from backend
+                    aiResponse = result.ai_response;
+                } else {
+                    console.error("Unexpected AI backend response structure:", result);
+                }
+
+                // Display AI's response in the chat history
+                appendMessage('Chatbot', aiResponse, 'ai');
+
+            } catch (error) {
+                console.error("Error communicating with the AI via backend:", error);
+                appendMessage('Chatbot', `Sorry, an error occurred while getting AI response: ${error.message}. Please try again.`, 'ai-error');
+            } finally {
+                // Hide loading indicator and enable input
+                loadingIndicator.classList.add('hidden');
+                askButton.disabled = false;
+                questionInput.disabled = false;
+                fileInput.disabled = false;
+                toggleFilePreviewButton.disabled = false;
+                questionInput.value = ''; // Clear the question input
+                // Scroll to the bottom of the chat history
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            }
+        });
+
+        // Event listener for "Clear History" button
+        clearHistoryButton.addEventListener('click', () => {
+            responseContainer.innerHTML = '<p class="text-gray-600">No questions asked yet.</p>';
+            resetFileSection(); // Clear file upload and preview
+            displayMessage('Chat history cleared!', 'info');
+        });
+
+        /**
+         * Appends a message to the chat history.
+         * @param {string} sender - The sender's name (e.g., 'You', 'Chatbot').
+         * @param {string} message - The message content.
+         * @param {string} type - Type of message ('user', 'ai', 'ai-error').
+         */
+        function appendMessage(sender, message, type) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('chat-message', 'break-words');
+
+            let senderClass = 'font-semibold text-indigo-700';
+            let messageClass = 'text-gray-800';
+
+            if (type === 'user') {
+                senderClass = 'font-semibold text-blue-700';
+                messageElement.classList.remove('bg-blue-100');
+                messageElement.classList.add('bg-blue-50'); // Lighter blue for user
+                messageElement.style.marginLeft = 'auto'; /* Align user messages right */
+                messageElement.style.maxWidth = '80%'; /* Limit width */
+            } else if (type === 'ai') {
+                senderClass = 'font-semibold text-green-700';
+                messageElement.classList.remove('bg-indigo-100');
+                messageElement.classList.add('bg-green-50'); // Light green for AI
+                messageElement.style.marginRight = 'auto'; /* Align AI messages left */
+                messageElement.style.maxWidth = '80%';
+            } else if (type === 'ai-error') {
+                senderClass = 'font-semibold text-red-700';
+                messageClass = 'text-red-800';
+                messageElement.classList.remove('bg-indigo-100');
+                messageElement.classList.add('bg-red-50'); // Light red for errors
+                messageElement.style.marginRight = 'auto';
+                messageElement.style.maxWidth = '80%';
+            }
+
+            messageElement.innerHTML = `
+                <p class="${senderClass}">${sender}:</p>
+                <p class="${messageClass}">${message}</p>
+            `;
+            responseContainer.appendChild(messageElement);
+            responseContainer.scrollTop = responseContainer.scrollHeight; // Auto-scroll to latest message
+        }
+
+        /**
+         * Displays a temporary message to the user.
+         * @param {string} msg - The message to display.
+         * @param {string} type - 'error' or 'info'.
+         */
+        function displayMessage(msg, type) {
+            const messageBox = document.createElement('div');
+            messageBox.classList.add(
+                'fixed', 'bottom-4', 'right-4', 'p-4', 'rounded-lg', 'shadow-lg', 'z-50',
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500',
+                'text-white', 'text-sm'
+            );
+            messageBox.textContent = msg;
+            document.body.appendChild(messageBox);
+
+            setTimeout(() => {
+                messageBox.remove();
+            }, 3000); // Remove after 3 seconds
+        }
+    </script>
+</body>
+</html>
