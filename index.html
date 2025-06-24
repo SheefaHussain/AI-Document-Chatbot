@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Document Chatbot</title>
-    <!-- Load Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom font for better aesthetics */
@@ -73,6 +72,26 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Style for microphone button */
+        .microphone-btn {
+            background-color: #10b981; /* Green */
+            color: white;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            transition: background-color 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .microphone-btn:hover {
+            background-color: #059669; /* Darker Green */
+        }
+        .microphone-btn.recording {
+            background-color: #ef4444; /* Red when recording */
+        }
+        .microphone-btn.recording:hover {
+            background-color: #dc2626; /* Darker Red */
+        }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen p-4">
@@ -81,7 +100,6 @@
             <span class="text-indigo-600">AI</span> Document Chatbot
         </h1>
 
-        <!-- File Upload Section -->
         <div class="mb-6">
             <label for="fileInput" class="block text-gray-700 text-lg font-semibold mb-2">Upload a File (.txt, .md, .pdf, .docx):</label>
             <input type="file" id="fileInput" accept=".txt,.md,.pdf,.docx" class="input-field block w-full text-gray-700">
@@ -89,7 +107,6 @@
             <p id="fileError" class="text-red-500 text-sm mt-2 hidden"></p>
         </div>
 
-        <!-- File Content Display - Initially entirely hidden -->
         <div id="filePreviewSection" class="mb-6 hidden">
             <div class="flex items-center justify-between mb-2">
                 <label class="block text-gray-700 text-lg font-semibold">File Content Preview:</label>
@@ -100,21 +117,32 @@
             <textarea id="fileContent" rows="10" class="input-field bg-gray-50 resize-y hidden" readonly placeholder="Uploaded file content (extracted by backend) will appear here..."></textarea>
         </div>
 
-        <!-- Chat Section -->
         <div class="mb-6">
             <label for="questionInput" class="block text-gray-700 text-lg font-semibold mb-2">Ask a Question:</label>
-            <textarea id="questionInput" rows="3" class="input-field resize-y" placeholder="e.g., 'What is the main topic of the document?'"></textarea>
-            <button id="askButton" class="btn-primary mt-4 w-full md:w-auto">
-                Ask Chatbot
-            </button>
+            <div class="flex items-center">
+                <textarea id="questionInput" rows="3" class="input-field resize-y flex-grow mr-2" placeholder="e.g., 'What is the main topic of the document?'"></textarea>
+                <button id="microphoneButton" class="microphone-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 0V6m0 0V5a2 2 0 112 2h-2zm0 0a7 7 0 017 7m0 0a7 7 0 01-7-7m7 0V6m0 0V5a2 2 0 11-2 2h2zm-2-2v7m-4 0a4 4 0 11-8 0m8 0V6m0 0V5a2 2 0 112 2h-2zm0 0a4 4 0 118 0m-8 0V6m0 0V5a2 2 0 11-2 2h2zm2 7v-3m0-4h-3m3 4h3m-3-4v-3m0 0a4 4 0 118 0m-8 0V6m0 0V5a2 2 0 112 2h-2zm0 0a4 4 0 11-8 0m8 0V6m0 0V5a2 2 0 11-2 2h2zm2 7v-3m0-4h-3m3 4h3m-3-4v-3M12 18V7m0 11a4 4 0 01-4-4m4 4a4 4 0 004-4m-4 4v-3m0-4h-3m3 4h3m-3-4v-3m0 0a4 4 0 118 0m-8 0V6m0 0V5a2 2 0 112 2h-2zm0 0a4 4 0 11-8 0m8 0V6m0 0V5a2 2 0 11-2 2h2zm2 7v-3m0-4h-3m3 4h3m-3-4v-3" />
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="flex items-center mt-4">
+                <button id="askButton" class="btn-primary w-full md:w-auto mr-4">
+                    Ask Chatbot
+                </button>
+                <div class="flex items-center">
+                    <input type="checkbox" id="voiceToggle" class="mr-2">
+                    <label for="voiceToggle" class="text-gray-700 font-medium">Enable Voice Response</label>
+                </div>
+            </div>
             <div id="loadingIndicator" class="loading-spinner mx-auto mt-4 hidden"></div>
         </div>
 
-        <!-- Chat Response Area -->
         <div id="chatResponses" class="space-y-4">
             <h2 class="text-xl font-semibold text-gray-800 mb-4">Chat History:</h2>
             <div id="responseContainer" class="bg-gray-100 p-4 rounded-xl max-h-96 overflow-y-auto">
-                <!-- Chat messages will be appended here -->
                 <p class="text-gray-600">No questions asked yet.</p>
             </div>
             <button id="clearHistoryButton" class="btn-danger mt-4 w-full md:w-auto">
@@ -136,9 +164,14 @@
         const loadingIndicator = document.getElementById('loadingIndicator');
         const responseContainer = document.getElementById('responseContainer');
         const clearHistoryButton = document.getElementById('clearHistoryButton');
+        const voiceToggle = document.getElementById('voiceToggle');
+        const microphoneButton = document.getElementById('microphoneButton'); // New: Microphone button
 
         let uploadedFileText = '';
         let isFilePreviewVisible = false;
+        let isVoiceEnabled = false;
+        let recognition; // New: SpeechRecognition instance
+        let isRecording = false; // New: State for recording
 
         // *** IMPORTANT: Replace with your actual deployed backend URL when deploying! ***
         const BACKEND_URL = 'http://127.0.0.1:5000'; 
@@ -175,6 +208,8 @@
             fileInput.disabled = true;
             askButton.disabled = true;
             toggleFilePreviewButton.disabled = true;
+            voiceToggle.disabled = true;
+            microphoneButton.disabled = true; // Disable microphone during file processing
 
             try {
                 const formData = new FormData();
@@ -215,6 +250,8 @@
                 fileInput.disabled = false;
                 askButton.disabled = false;
                 toggleFilePreviewButton.disabled = false;
+                voiceToggle.disabled = false;
+                microphoneButton.disabled = false; // Re-enable microphone
             }
         });
 
@@ -230,6 +267,73 @@
             }
         });
 
+        // Event listener for voice toggle
+        voiceToggle.addEventListener('change', () => {
+            isVoiceEnabled = voiceToggle.checked;
+            if (!isVoiceEnabled && window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel(); // Stop speaking if disabled
+            }
+            displayMessage(`Voice response ${isVoiceEnabled ? 'enabled' : 'disabled'}`, 'info');
+        });
+
+        // Function to speak text
+        function speakText(text) {
+            if (isVoiceEnabled && 'speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        // New: Initialize SpeechRecognition (cross-browser compatibility)
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = false; // Only get a single result per speech
+            recognition.interimResults = false; // Don't show interim results
+            recognition.lang = 'en-US'; // Set language
+
+            recognition.onstart = () => {
+                isRecording = true;
+                microphoneButton.classList.add('recording');
+                displayMessage('Listening...', 'info');
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                questionInput.value = transcript;
+                displayMessage('Voice command recognized!', 'info');
+                // You can automatically submit the question here if desired
+                // askButton.click(); 
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error:', event.error);
+                displayMessage(`Speech recognition error: ${event.error}`, 'error');
+                isRecording = false;
+                microphoneButton.classList.remove('recording');
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                microphoneButton.classList.remove('recording');
+                displayMessage('Listening stopped.', 'info');
+            };
+
+            microphoneButton.addEventListener('click', () => {
+                if (isRecording) {
+                    recognition.stop();
+                } else {
+                    questionInput.value = ''; // Clear previous input
+                    recognition.start();
+                }
+            });
+        } else {
+            microphoneButton.disabled = true;
+            microphoneButton.title = 'Speech Recognition not supported in this browser.';
+            displayMessage('Speech Recognition not supported in this browser.', 'error');
+        }
+
 
         // Event listener for the "Ask Chatbot" button
         askButton.addEventListener('click', async () => {
@@ -237,11 +341,13 @@
 
             if (!question) {
                 displayMessage('Please enter a question.', 'error');
+                speakText('Please enter a question.');
                 return;
             }
 
             if (!uploadedFileText) {
                 displayMessage('Please upload and process a file first.', 'error');
+                speakText('Please upload and process a file first.');
                 return;
             }
 
@@ -259,6 +365,8 @@
             questionInput.disabled = true;
             fileInput.disabled = true;
             toggleFilePreviewButton.disabled = true;
+            voiceToggle.disabled = true;
+            microphoneButton.disabled = true; // Disable microphone during AI processing
 
             try {
                 // Construct the full prompt including document content
@@ -281,6 +389,7 @@
                 let aiResponse = "I could not get a response from the AI.";
                 if (result.ai_response) { // Expecting 'ai_response' from backend
                     aiResponse = result.ai_response;
+                    speakText(aiResponse); // Speak the AI response
                 } else {
                     console.error("Unexpected AI backend response structure:", result);
                 }
@@ -290,7 +399,9 @@
 
             } catch (error) {
                 console.error("Error communicating with the AI via backend:", error);
-                appendMessage('Chatbot', `Sorry, an error occurred while getting AI response: ${error.message}. Please try again.`, 'ai-error');
+                const errorMessage = `Sorry, an error occurred while getting AI response: ${error.message}. Please try again.`;
+                appendMessage('Chatbot', errorMessage, 'ai-error');
+                speakText(errorMessage); // Speak the error message
             } finally {
                 // Hide loading indicator and enable input
                 loadingIndicator.classList.add('hidden');
@@ -298,6 +409,8 @@
                 questionInput.disabled = false;
                 fileInput.disabled = false;
                 toggleFilePreviewButton.disabled = false;
+                voiceToggle.disabled = false;
+                microphoneButton.disabled = false; // Re-enable microphone
                 questionInput.value = ''; // Clear the question input
                 // Scroll to the bottom of the chat history
                 responseContainer.scrollTop = responseContainer.scrollHeight;
@@ -309,6 +422,12 @@
             responseContainer.innerHTML = '<p class="text-gray-600">No questions asked yet.</p>';
             resetFileSection(); // Clear file upload and preview
             displayMessage('Chat history cleared!', 'info');
+            if (window.speechSynthesis.speaking) {
+                window.speechSynthesis.cancel(); // Stop speaking if history is cleared
+            }
+            if (isRecording) {
+                recognition.stop(); // Stop recording if history is cleared
+            }
         });
 
         /**
